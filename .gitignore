@@ -1,0 +1,30 @@
+# 민감정보 - 절대 GitHub에 올리지 않음
+config.json
+
+# 로그 및 DB
+*.log
+*.db
+
+# 임시/테스트 파일
+_test_*.py
+_check_*.py
+check_db.py
+diagnose.py
+find_rss.py
+verify_data.py
+test_bonds.py
+test_dart.py
+
+# 테스트 출력물
+*.pdf
+*.html
+logs/
+
+# Windows 로컬 전용 파일
+_risk_monitor_task.xml
+_register_task_admin.ps1
+
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo

@@ -1,0 +1,52 @@
+name: 증권사 Risk 모니터링
+
+on:
+  schedule:
+    - cron: '*/30 * * * 1-5'  # 평일 30분마다 (UTC 기준 Mon-Fri)
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Seoul
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore DB (이전 실행 상태 복원)
+        uses: actions/cache/restore@v4
+        with:
+          path: risk_monitor.db
+          key: risk-monitor-db-${{ github.run_number }}
+          restore-keys: risk-monitor-db-
+
+      - name: Create config.json
+        env:
+          SMTP_HOST:           ${{ secrets.SMTP_HOST }}
+          SMTP_PORT:           ${{ secrets.SMTP_PORT }}
+          EMAIL_SENDER:        ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD:      ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECIPIENTS:    ${{ secrets.EMAIL_RECIPIENTS }}
+          NAVER_CLIENT_ID:     ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+        run: python make_config.py
+
+      - name: Run risk monitor (1회)
+        run: python securities_risk_monitor.py --once
+
+      - name: Save DB (다음 실행을 위해 DB 저장)
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: risk_monitor.db
+          key: risk-monitor-db-${{ github.run_number }}
