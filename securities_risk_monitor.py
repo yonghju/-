@@ -7,6 +7,7 @@
 """
 
 import re
+import sys
 import difflib
 import feedparser
 import requests
@@ -112,22 +113,15 @@ def _normalize_title(title: str) -> str:
 def dedup_by_title(articles: list, threshold: float = 0.7) -> list:
     """
     제목 유사도 >= threshold 인 기사를 같은 뉴스로 판단,
-    severity_score 가장 높은 기사 하나만 유지.
+    가장 먼저 발견된 기사 하나만 유지.
     """
     kept: list = []
     for article in articles:
         norm = _normalize_title(article.title)
-        duplicate = False
-        for i, existing in enumerate(kept):
-            ratio = difflib.SequenceMatcher(
-                None, norm, _normalize_title(existing.title)
-            ).ratio()
-            if ratio >= threshold:
-                # 점수 높은 쪽 유지
-                if article.severity_score > existing.severity_score:
-                    kept[i] = article
-                duplicate = True
-                break
+        duplicate = any(
+            difflib.SequenceMatcher(None, norm, _normalize_title(e.title)).ratio() >= threshold
+            for e in kept
+        )
         if not duplicate:
             kept.append(article)
     return kept

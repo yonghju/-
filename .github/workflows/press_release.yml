@@ -2,7 +2,7 @@ name: 금융유관기관 보도자료
 
 on:
   schedule:
-    - cron: '0 23 * * 0-4'  # 08:00 KST 평일 (UTC 23:00 Sun-Thu)
+    - cron: '20 23 * * 0-4'  # 08:20 KST 평일 (UTC 23:20 Sun-Thu)
   workflow_dispatch:
 
 jobs:

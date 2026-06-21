@@ -257,10 +257,26 @@ def _fetch_kofia(target_date: datetime.date) -> list[str]:
     return items
 
 def _fetch_krx(target_date: datetime.date) -> list[str]:
-    """한국거래소 보도자료 — KRX 사이트가 JavaScript SPA여서 자동 수집이 어려움.
-    직접 확인: https://www.krx.co.kr (홈 → 소통/뉴스 → 보도자료)
-    """
-    return ["⚠ 한국거래소 보도자료는 사이트 특성상 자동 수집 불가 → 직접 확인 요망"]
+    """한국거래소 보도자료 — 메인 홈페이지 JSON API (noti_info&obj=news)"""
+    items = []
+    try:
+        SESS.get("https://www.krx.co.kr/main/main.jsp", timeout=15)
+        r = SESS.post(
+            "https://www.krx.co.kr/main/main.jspx?cmd=noti_info&obj=news",
+            headers={"Referer": "https://www.krx.co.kr/main/main.jsp"},
+            timeout=15,
+        )
+        r.raise_for_status()
+        data = r.json()
+        target_str = target_date.strftime("%Y/%m/%d")
+        for item in data.get("output", []):
+            if item.get("wrt_dd", "") == target_str:
+                title = item.get("title", "").rstrip(".")
+                if title:
+                    items.append(title)
+    except Exception as e:
+        logging.warning(f"KRX parse error: {e}")
+    return items
 
 def _fetch_molit(target_date: datetime.date) -> list[str]:
     """국토교통부 보도자료 목록 HTML (연결 불안정 → 재시도)"""
@@ -444,8 +460,8 @@ def main():
         logging.error("schedule 미설치 — pip install schedule")
         return
 
-    schedule.every().day.at("07:30").do(run_report)
-    logging.info("스케줄러 시작: 매일 07:30 실행")
+    schedule.every().day.at("08:20").do(run_report)
+    logging.info("스케줄러 시작: 매일 08:20 실행")
     while True:
         schedule.run_pending()
         time.sleep(30)

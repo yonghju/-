@@ -8,7 +8,7 @@
 
 import sys, json, smtplib, schedule, time, logging, requests
 from logging.handlers import RotatingFileHandler
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -49,17 +49,80 @@ HEADERS = {
 # 데이터 수집 함수
 # ══════════════════════════════════════════════════════
 
-def get_yf(ticker: str, name: str) -> dict | None:
-    """yfinance: 주가지수"""
+def get_naver_index(code: str, name: str) -> dict | None:
+    """네이버 실시간 국내 주가지수 (KOSPI, KOSDAQ)"""
+    url = f"https://polling.finance.naver.com/api/realtime/domestic/index/{code}"
     try:
-        hist = yf.Ticker(ticker).history(period="5d")
+        r = requests.get(url, headers={
+            "User-Agent": HEADERS["User-Agent"],
+            "Referer": "https://finance.naver.com/",
+        }, timeout=10)
+        r.raise_for_status()
+        d = r.json()["datas"][0]
+        close = float(d["closePrice"].replace(",", ""))
+        chg   = float(d["compareToPreviousClosePrice"].replace(",", ""))
+        pct   = float(d["fluctuationsRatio"].replace(",", ""))
+        traded = d.get("localTradedAt", "")
+        date_str = traded[5:10].replace("-", "/") if traded else datetime.now().strftime("%m/%d")
+        return {"name": name, "close": close, "change": chg, "change_pct": pct, "date": date_str}
+    except Exception as e:
+        logger.warning(f"{name} 네이버 지수: {e}")
+        return None
+
+
+def get_naver_world_index(symbol: str, name: str) -> dict | None:
+    """네이버 해외증시 시세표 파싱 — 전일 종가 기준
+    symbol 예: DJI@DJI(다우), NAS@IXIC(나스닥), NII@NI225(니케이)
+    """
+    url = f"https://finance.naver.com/world/sise.naver?symbol={symbol}"
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=10)
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+        table = soup.find("table", class_="tb_status2")
+        if not table:
+            raise ValueError("시세표 없음")
+        rows = table.find_all("tr")
+        data = []
+        for row in rows[1:]:  # 헤더 스킵
+            tds = row.find_all("td")
+            if len(tds) < 2:
+                continue
+            date_str = tds[0].get_text(strip=True)   # 2026.06.10
+            close_str = tds[1].get_text(strip=True)  # 49,918.78
+            if not date_str or not close_str:
+                continue
+            data.append((date_str, float(close_str.replace(",", ""))))
+        if len(data) < 2:
+            raise ValueError(f"데이터 부족 ({len(data)}개)")
+        date0, close0 = data[0]   # 최신
+        _, close1     = data[1]   # 전전일
+        chg = close0 - close1
+        date_fmt = date0[5:].replace(".", "/")  # "06/10"
+        logger.info(f"{name}: {close0:,.2f} ({chg:+.2f}) 기준일 {date_fmt}")
+        return {"name": name, "close": close0, "change": chg,
+                "change_pct": chg / close1 * 100, "date": date_fmt}
+    except Exception as e:
+        logger.warning(f"{name} 네이버 해외지수: {e}")
+        return None
+
+
+def get_yf(ticker: str, name: str) -> dict | None:
+    """yfinance fallback — 네이버 해외지수 실패 시 사용"""
+    try:
+        hist = yf.Ticker(ticker).history(period="10d")
         if hist is None or len(hist) < 2:
+            return None
+        hist = hist.dropna(subset=["Close"])
+        if len(hist) < 2:
             return None
         close = float(hist["Close"].iloc[-1])
         prev  = float(hist["Close"].iloc[-2])
         chg   = close - prev
+        date_str = hist.index[-1].strftime("%m/%d")
+        logger.info(f"{name} (yf): {close:,.2f} ({chg:+.2f}) 기준일 {date_str}")
         return {"name": name, "close": close, "change": chg,
-                "change_pct": chg / prev * 100, "date": hist.index[-1].strftime("%m/%d")}
+                "change_pct": chg / prev * 100, "date": date_str}
     except Exception as e:
         logger.warning(f"{name}: {e}")
         return None
@@ -215,13 +278,16 @@ def collect_all(cfg: dict) -> dict:
                 or get_ecos(ecos_key, "817Y002", "010210000", "국고채 10년"))
 
     data = {
-        "kospi":       get_yf("^KS11",  "KOSPI"),
-        "kosdaq":      get_yf("^KQ11",  "KOSDAQ"),
+        "kospi":       get_naver_index("KOSPI",  "KOSPI"),
+        "kosdaq":      get_naver_index("KOSDAQ", "KOSDAQ"),
         "bond_3y":     bond_3y,
         "bond_10y":    bond_10y,
-        "nikkei":      get_yf("^N225",  "니케이 225"),
-        "dow":         get_yf("^DJI",   "다우존스"),
-        "nasdaq":      get_yf("^IXIC",  "나스닥"),
+        "nikkei":      (get_naver_world_index("NII@NI225", "니케이 225")
+                        or get_yf("^N225",  "니케이 225")),
+        "dow":         (get_naver_world_index("DJI@DJI",   "다우존스")
+                        or get_yf("^DJI",   "다우존스")),
+        "nasdaq":      (get_naver_world_index("NAS@IXIC",  "나스닥")
+                        or get_yf("^IXIC",  "나스닥")),
         "usdkrw":      fx.get("usdkrw"),
         "jpykrw":      fx.get("jpykrw"),
         "cnykrw":      fx.get("cnykrw"),
