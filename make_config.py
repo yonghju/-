@@ -5,7 +5,7 @@ config = {
     "check_interval_minutes": 30,
     "email": {
         "smtp_host": os.environ.get("SMTP_HOST", "smtp.gmail.com"),
-        "smtp_port": int(os.environ.get("SMTP_PORT", "587")),
+        "smtp_port": int(os.environ.get("SMTP_PORT", "587").strip().strip('"\'') or "587"),
         "sender": os.environ.get("EMAIL_SENDER", ""),
         "password": os.environ.get("EMAIL_PASSWORD", ""),
         "recipients": [
