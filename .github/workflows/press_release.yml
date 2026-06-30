@@ -33,4 +33,4 @@ jobs:
         run: python make_config.py
 
       - name: Run press release report
-        run: python press_release_report.py
+        run: python press_release_report.py --now
