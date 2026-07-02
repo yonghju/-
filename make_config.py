@@ -1,17 +1,21 @@
 """GitHub Actions에서 환경변수(Secrets)로 config.json 생성"""
 import json, os
 
+def _s(key, default=""):
+    """시크릿 값의 앞뒤 공백 및 따옴표 제거"""
+    return os.environ.get(key, default).strip().strip("\"'")
+
 config = {
     "check_interval_minutes": 30,
     "email": {
-        "smtp_host": os.environ.get("SMTP_HOST", "smtp.gmail.com"),
-        "smtp_port": int(os.environ.get("SMTP_PORT", "587").strip().strip('"\'') or "587"),
-        "sender": os.environ.get("EMAIL_SENDER", ""),
-        "password": os.environ.get("EMAIL_PASSWORD", ""),
+        "smtp_host": _s("SMTP_HOST", "smtp.gmail.com"),
+        "smtp_port": int(_s("SMTP_PORT", "587") or "587"),
+        "sender":    _s("EMAIL_SENDER"),
+        "password":  _s("EMAIL_PASSWORD"),
         "recipients": [
-            r.strip()
+            r.strip().strip("\"'")
             for r in os.environ.get("EMAIL_RECIPIENTS", "").split(",")
-            if r.strip()
+            if r.strip().strip("\"'")
         ],
     },
     "naver_api": {
