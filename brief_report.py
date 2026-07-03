@@ -454,22 +454,18 @@ def send_email(html: str, today: date, cfg: dict, logger: logging.Logger) -> Non
     msg["To"] = ", ".join(em["recipients"])
     msg.attach(MIMEText(html, "html", "utf-8"))
 
-    smtp = smtplib.SMTP(em["smtp_host"], em["smtp_port"], timeout=30)
     try:
-        smtp.ehlo()
-        smtp.starttls()
-        smtp.ehlo()
-        smtp.login(em["sender"], em["password"])
-        smtp.sendmail(em["sender"], em["recipients"], msg.as_bytes())
-        logger.info(f"이메일 발송 완료 → {em['recipients']}")
-    except Exception as e:
-        logger.error(f"발송 오류: {e}")
-        raise
-    finally:
-        try:
-            smtp.quit()
-        except Exception:
-            pass
+        with smtplib.SMTP_SSL(em["smtp_host"], 465, timeout=30) as smtp:
+            smtp.login(em["sender"], em["password"])
+            smtp.sendmail(em["sender"], em["recipients"], msg.as_bytes())
+    except Exception:
+        with smtplib.SMTP(em["smtp_host"], em["smtp_port"], timeout=30) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.ehlo()
+            smtp.login(em["sender"], em["password"])
+            smtp.sendmail(em["sender"], em["recipients"], msg.as_bytes())
+    logger.info(f"이메일 발송 완료 → {em['recipients']}")
 
 
 # ── 메인 ────────────────────────────────────────────────────────────────────

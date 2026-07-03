@@ -414,22 +414,18 @@ def send_email(cfg: dict, html: str, target_date: datetime.date):
     msg["To"]      = ", ".join(ec["recipients"])
     msg.attach(MIMEText(html, "html", "utf-8"))
 
-    s = smtplib.SMTP(ec["smtp_host"], ec["smtp_port"], timeout=30)
     try:
-        s.ehlo()
-        s.starttls()
-        s.ehlo()
-        s.login(ec["sender"], ec["password"])
-        s.sendmail(ec["sender"], ec["recipients"], msg.as_bytes())
-        logging.info(f"이메일 발송 완료 → {ec['recipients']}")
-    except Exception as e:
-        logging.error(f"발송 오류: {e}")
-        raise
-    finally:
-        try:
-            s.quit()
-        except Exception:
-            pass
+        with smtplib.SMTP_SSL(ec["smtp_host"], 465, timeout=30) as s:
+            s.login(ec["sender"], ec["password"])
+            s.sendmail(ec["sender"], ec["recipients"], msg.as_bytes())
+    except Exception:
+        with smtplib.SMTP(ec["smtp_host"], ec["smtp_port"], timeout=30) as s:
+            s.ehlo()
+            s.starttls()
+            s.ehlo()
+            s.login(ec["sender"], ec["password"])
+            s.sendmail(ec["sender"], ec["recipients"], msg.as_bytes())
+    logging.info(f"이메일 발송 완료 → {ec['recipients']}")
 
 # ── 메인 작업 ─────────────────────────────────────────────────────────────────
 def run_report():
