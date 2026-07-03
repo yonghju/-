@@ -32,5 +32,25 @@ jobs:
           EMAIL_RECIPIENTS:   ${{ secrets.EMAIL_RECIPIENTS }}
         run: python make_config.py
 
+      - name: SMTP 연결 진단
+        run: |
+          python -c "
+          import smtplib, json
+          with open('config.json') as f:
+              cfg = json.load(f)['email']
+          host = cfg['smtp_host']
+          port = cfg['smtp_port']
+          print(f'smtp_host={repr(host)}, port={port}')
+          print(f'sender={repr(cfg[\"sender\"])}, recipients={repr(cfg[\"recipients\"])}')
+          print(f'password_set={bool(cfg[\"password\"])}')
+          for p,ssl in [(465,True),(587,False)]:
+              try:
+                  s = smtplib.SMTP_SSL(host,p,timeout=10) if ssl else smtplib.SMTP(host,p,timeout=10)
+                  s.quit()
+                  print(f'port {p}: OK')
+              except Exception as e:
+                  print(f'port {p}: FAIL -> {e}')
+          "
+
       - name: Run press release report
         run: python press_release_report.py --now
